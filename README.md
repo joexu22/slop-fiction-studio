@@ -1,42 +1,104 @@
-# GenMedia Creative Studio | Vertex AI
+# Slop Fiction Studio
 
-> ###### _This is not an officially supported Google product. This project is not eligible for the [Google Open Source Software Vulnerability Rewards Program](https://bughunters.google.com/open-source-security). This project is intended for demonstration purposes only. It is not intended for use in a production environment._
+> **Meme Slop Fiction Generator** — an art project / automated video & shorts experiment  
+> Adapted from Google’s Vertex AI GenMedia Creative Studio (original GenMedia Creative Studio for Veo, Imagen, Lyria, etc.)
 
-![GenMedia Creative Studio v.next](https://github.com/user-attachments/assets/da5ad223-aa6e-413c-b36e-5d63e5d5b758)
-
-![GenMedia Creative Studio v.next](https://github.com/user-attachments/assets/61977f3c-dbb6-4002-b8c0-77d57aa03cce)
-
-## Table of Contents
-
-- [GenMedia Creative Studio | Vertex AI](#genmedia-creative-studio--vertex-ai)
-- [Table of Contents](#table-of-contents)
-- [GenMedia Creative Studio](#genmedia-creative-studio)
-- [Documentation Hub](#documentation-hub)
-  - [Quick Start](#quick-start)
-  - [Deploying to Google Cloud](#deploying-to-google-cloud)
-- [Experiments & MCP Tools](#experiments--mcp-tools)
-- [Contributing changes](#contributing-changes)
-- [Licensing](#licensing)
-- [Disclaimer](#disclaimer)
-
-## GenMedia Creative Studio
-
-> **Browser Compatibility:** For the best experience, we recommend using Google Chrome. Some features may not work as expected on other browsers, such as Safari or Firefox.
-
-GenMedia Creative Studio is a web application showcasing Google Cloud's generative media - Veo, Lyria,  Gemini Image Generation (Nano Banana), Chirp 3 HD, and Gemini TTS along with custom workflows and techniques for creative exploration and inspiration. We're looking forward to see what you create!
-
-Current featureset:
-
-- **Image:** Gemini Flash Image Generation (Nano Banana 2), Gemini 3 Pro Image (Nano Banana Pro), Virtual Try-On
-- **Video:** Veo 3.1, Veo 3, Veo 2
-- **Music:** Lyria 3 & 2
-- **Speech:** Chirp 3 HD, Gemini Text to Speech
-- **Workflows:** Character Consistency, Shop the Look, Starter Pack Moodboard, Interior Designer
-- **Asset Library**
-
-This is built using [Mesop](https://mesop-dev.github.io/mesop/), an open source Python framework used at Google for rapid AI app development, and the [scaffold for Studio style apps](https://github.com/ghchinoy/studio-scaffold).
+> ###### _This is not an officially supported Google product. This project is not eligible for the [Google Open Source Software Vulnerability Rewards Program](https://bughunters.google.com/open-source-security). This project is intended for demonstration and artistic purposes only._
 
 ---
+
+## The Premise (the joke and the point)
+
+**This is a joke.** 
+
+We took a powerful Google Cloud generative media stack (Veo video, Gemini, Lyria, image models, chaining, native audio, post-production) and pointed it at the most unhinged possible use case: fully automated, one-shot "Slop Fiction" — gloriously over-the-top Chinese cultivation xianxia short films and 2–5 minute episodes. Badass young masters, face-slapping, forbidden techniques, Studio Ghibli aesthetics, and zero restraint.
+
+The `slop_fiction_maker/` skill is the heart of this fork. Give it a ridiculous premise and it writes the script (with in-scene dialogue), generates chained video beats with native audio, stitches everything, makes thumbnails, titles, descriptions, tags, and can even push to YouTube.
+
+**But the joke has a real core.**
+
+This project is an exploration of **personalized, automated, long-form story generation**. What happens when you can summon a complete, weird little film from a single sentence in seconds?
+
+The deeper, non-joke premise:
+
+We are standing on the steps to the **Holodeck**.
+
+Every media generation system — whether it’s producing prestige cinematic work, careful indie experiments, or magnificent trash like this — is reaching toward the same thing: instant, personal, responsive, living media. Stories that react to you. Worlds you can step inside. The Holodeck was never just about perfect pixels; it was about *agency and immediacy* in storytelling.
+
+The current wave of generators, slop or sublime, are the awkward, charming, sometimes unhinged early prototypes of that future. This project deliberately takes one of the silliest possible paths and sees how far the tools can actually carry it.
+
+If you’re here for the slop: welcome, the slop is the point.  
+If you’re here for the technique: the pipelines, prompting strategies, chaining, audio handling, and post-production tricks are real and reusable.  
+If you’re here for the Holodeck thought: you’re in the right place.
+
+---
+
+## What’s in this repo
+
+- **`slop_fiction_maker/`** — The main artifact: a self-contained, one-shot episode generator you can call from the command line, from agents, or as an MCP skill.
+- The full underlying **GenMedia Creative Studio** stack (the original web app, models, workflows, components) — this is a personal adaptation/fork focused on the slop fiction experiment.
+- Lots of experiments, MCP servers, and generative techniques inherited from the original Google Cloud platform project.
+
+See [slop_fiction_maker/README.md](slop_fiction_maker/README.md) for how to actually run the meme machine.
+
+The original studio documentation and capabilities are still here if you want to use the serious tools for less ridiculous things.
+
+---
+
+## Original GenMedia Creative Studio (for reference)
+
+The code and architecture in this repository are adapted from the Vertex AI GenMedia Creative Studio — a web application showcasing Google Cloud’s generative media capabilities (Veo, Lyria, Gemini Image Generation, Chirp, custom workflows like character consistency, shop-the-look, interior design, etc.).
+
+It is built with [Mesop](https://mesop-dev.github.io/mesop/).
+
+For the original project’s full documentation, deployment guides, and experiments, see the upstream at:
+https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio (or the docs site linked in the original README below).
+
+Current inherited feature set (the powerful substrate we’re abusing for slop):
+
+- **Image:** Gemini Flash Image, Gemini 3 Pro Image, Virtual Try-On, Imagen models
+- **Video:** Veo 3.1, Veo 3, Veo 2 + extension chaining
+- **Music:** Lyria
+- **Speech:** Chirp 3 HD + Gemini TTS
+- **Workflows & Library** for media management
+
+---
+
+## Quick Start (Slop Mode)
+
+```bash
+# One random episode
+python -m slop_fiction_maker.generate_episode --random --duration 180
+
+# Or feed it your worst idea
+python -m slop_fiction_maker.generate_episode \
+  "a fallen genius re-cultivates using a forbidden bloodline technique that slowly turns him into a demon" \
+  --duration 240
+```
+
+See the full [slop_fiction_maker/README.md](slop_fiction_maker/README.md) for agent/MCP usage, custom narration, YouTube upload, etc.
+
+---
+
+## Contributing / Forking
+
+This is primarily a personal art/experiment repo. PRs that improve the generation pipelines, prompting, or Holodeck-adjacent ideas are welcome. Pure slop improvements are also welcome.
+
+The original project’s contributing guidelines still apply for the shared studio code.
+
+## Licensing
+
+Code is licensed under Apache 2.0 (inherited). See [LICENSE](LICENSE).
+
+## Disclaimer
+
+> [!CAUTION]
+> This is **not** an officially supported Google product.
+> This fork is an unofficial, artistic, and highly unserious adaptation for exploration and meme purposes.
+
+---
+
+*Onward toward the Holodeck. One face-slap at a time.*
 
 ## 📖 Documentation Hub
 

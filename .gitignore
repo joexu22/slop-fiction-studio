@@ -1,14 +1,98 @@
-__pycache__
-venv
-venv
-.venv
-__pycache__
-.ruff_cache
-.env
-.env*
-.vscode
+# =============================================================================
+# Python / Build Artifacts
+# =============================================================================
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.pyc
+*.pyo
+
+# =============================================================================
+# Virtual Environments
+# =============================================================================
+**/.venv/
+**/venv/
+**/ENV/
+**/env/
+**/VENV/
+
+# =============================================================================
+# Caches & Tooling
+# =============================================================================
+**/.ruff_cache/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# =============================================================================
+# OS / Editor / IDE
+# =============================================================================
 .DS_Store
+**/.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# Local Secrets & Environment (never commit real creds)
+# =============================================================================
+# Actual secret files
+.env
+.env.local
+.env.*.local
+.envrc
+# Allow committed templates/examples so a fresh clone + config file "just works"
+!.env.template
+!.env.example
+!.env.*.example
+!.env.*.template
+!dotenv.template
+!sample.env
+!**/.*.env.example
+!**/.*.env.template
+!**/sample.env
+
+# =============================================================================
+# Personal / Generated Outputs (the main leak vectors)
+# =============================================================================
+# Slop Fiction episodes + metadata (contains GCS paths, full scripts, videos)
+slop_fiction_maker/output/
+
+# Test artifacts that can contain generated media or personal data
+test/c2pa/output/
+test/screenshots/
+
+# User working directories
+local/
+plans/
+recaps/
 samples/
+
+# =============================================================================
+# Project-specific runtime artifacts
+# =============================================================================
 # gemini-cli settings
 .gemini/
 
@@ -16,13 +100,9 @@ samples/
 gha-creds-*.json
 
 .commit.txt
-local/
-node_modules
-dist
-local/  
-recaps/
-plans/
-test/screenshots/
+
+node_modules/
+dist/
 
 ### Terraform ###
 # Local .terraform directories
