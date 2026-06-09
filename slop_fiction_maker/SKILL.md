@@ -86,21 +86,22 @@ MCP tool wrapping it. The skill is intentionally "one generation, one shot".
 - The agent/MCP controls high-level decisions (target length, custom narration
   overlay, etc.). Per-beat reference images or style can be added later.
 
-## Output artifacts (per run, timestamped folder)
+## Output artifacts (per run)
+New runs use a clean, dated + serialized layout (gitignored):
+
 ```
-slop_fiction_maker/output/2026-06-04_143022_some-topic/
-├── final_episode.mp4          # The finished 2-5 min video
-├── thumbnail.png
-├── metadata.json              # title, description, tags, duration, etc.
-├── script.json                # full generated script + beats + prompts
-├── narration.wav              # raw voiceover
-├── music.wav                  # raw music (if separate)
-└── ...
+slop_fiction_maker/output/
+  YYYY-MM-DD/
+    NNN-short-slug/
+      clips/          # per-beat or extension-step clips (with native audio)
+      audio/          # only when --with-custom-narration
+      final/          # the deliverable .mp4(s)
+      script.json
+      metadata.json
+      thumbnail.png
 ```
 
-All final media is also uploaded to the project's GCS bucket via the studio's
-`store_to_gcs` utility and recorded in Firestore as `MediaItem` (if the main
-app's Firestore is configured).
+All final media is also uploaded to GCS via the studio's `store_to_gcs` and can be recorded in Firestore. The entire `output/` tree is deliberately **not committed** (see root `.gitignore`).
 
 ## Configuration & Style
 All aesthetic and trope decisions live in `style_bible.py`. Easy to tweak the
@@ -134,3 +135,12 @@ over-the-top cultivation slop that embraces what the current generative models
 do well and what they do strangely. The automation exists so the human can
 focus on coming up with the next ridiculous premise and then go touch grass
 while the silicon dream-engine forges another scripture.
+
+## Public Face
+
+Current flagship: https://www.youtube.com/watch?v=Jp2DN7GAbXw  
+Channel: https://www.youtube.com/@slopfictionYT
+
+The root README of the repo contains the full artistic handoff statement (joke + Holodeck premise).
+
+For deep technical context see `HANDOFF.md` in this directory.

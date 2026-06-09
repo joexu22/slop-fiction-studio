@@ -131,3 +131,17 @@ It deliberately does **not** touch `experiments/` so we stay compliant with proj
 ## One generation. One shot. No review gates.
 
 That's the contract. The automation exists so you can throw ridiculous premises at it from chat and go do something else while the silicon dream-engines forge another scripture for the Slop Sect.
+
+## Public Face & Featured Work
+
+Current flagship example (episode 004):
+
+https://www.youtube.com/watch?v=Jp2DN7GAbXw
+
+Full channel: https://www.youtube.com/@slopfictionYT
+
+See the root `README.md` for the artistic statement and the bigger "steps toward the Holodeck" framing.
+
+## Technical Handoff
+
+For implementation details, audio evolution (native dialogue vs. custom narrator), decisions, gotchas, and future work, read [HANDOFF.md](HANDOFF.md).

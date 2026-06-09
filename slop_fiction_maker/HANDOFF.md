@@ -1,9 +1,36 @@
-# Slop Fiction Maker — Technical Handoff
+# Slop Fiction Maker — Handoff Document
 
-**Project:** `slop_fiction_maker/` (inside the larger `slop-fiction-studio` repo)  
-**Goal:** Fully automated, hands-off generator of 2–5 minute "Slop Fiction" YouTube episodes. Campy, tropey Chinese cultivation (xianxia) stories with over-the-top narration, Ghibli-inspired visuals (embracing generative artifacts as part of the charm), using Veo extension chaining for long continuous takes.
+**Project:** `slop-fiction-studio` (personal fork/art project)  
+**Core Artifact:** `slop_fiction_maker/` — a one-shot AI skill for generating 2–5 minute "Meme Slop Fiction" cultivation episodes.
 
-This document captures the major technical work, decisions, trade-offs, current state, and pointers for future work. Written as the explicit handoff at the close of the initial build phase (user request: "write a handoff md file that kinda goes through what technical things you did and why you made your decisions").
+## Project Identity (Artistic + Practical Handoff)
+
+This is **not** just another generative media tool. The root README reframes the entire repo as:
+
+- An **art project / meme generator** adapted from Google’s Vertex AI GenMedia Creative Studio.
+- Deliberately absurd “Slop Fiction” (over-the-top xianxia cultivation shorts with Ghibli aesthetics) produced end-to-end by models.
+- Surface level: pure joke / “the slop is the point.”
+- Deeper premise: every media generator (slop or prestige) is an awkward early prototype on the path to the **Holodeck** — instant, personal, responsive, living stories. This fork takes the most ridiculous possible route to explore that future.
+
+**Public face:**
+- Featured flagship episode (004): https://www.youtube.com/watch?v=Jp2DN7GAbXw
+- Channel: https://www.youtube.com/@slopfictionYT (subscribe for drops)
+
+**Critical for any handoff / fork / clone:**
+- `.gitignore` has been hardened (see root `.gitignore` and history). In particular `slop_fiction_maker/output/` is ignored. This prevents leaking:
+  - Large generated video files
+  - `metadata.json` / `script.json` that contain real GCS bucket paths (e.g. `gen-lang-client-...-assets`)
+  - Personal run dates and story content
+- Never commit anything under `output/`, `.env`, or stray `.DS_Store` files.
+- On a fresh machine: `cp dotenv.template .env`, fill `PROJECT_ID` (and optionally YouTube creds), then run.
+
+The technical details below preserve the original “hands-off one generation, one shot” contract while documenting the evolution (especially the big shift to native in-video dialogue).
+
+---
+
+**Technical Goal (preserved):** Fully automated, hands-off generator of 2–5 minute "Slop Fiction" YouTube episodes. Campy, tropey Chinese cultivation (xianxia) stories with Ghibli-inspired visuals (embracing generative artifacts as part of the charm).
+
+This document captures the major technical work, decisions, trade-offs, current state, and pointers for future work. It was originally written as the explicit handoff at the close of the initial build phase and has been updated with higher-level project context, git hygiene, and the artistic reframing.
 
 The user (channel owner) wants to stay hands-off on implementation details but cares about the final creative output and being able to iterate on audio balance, consistency, and structure. During handoff write we also did a small cleanup of the orchestrator finalization (undefined variables from earlier native-only bypass experiments) so the full described flow actually runs to completion.
 
@@ -141,8 +168,9 @@ The user (channel owner) wants to stay hands-off on implementation details but c
 - **Script quality (dialogue length, naturalism & flow):** Now that dialogue is the primary spoken content fed to Veo, you may want to iterate on the prompt in `script_generator.py` if the generated lines are too short, too narrator-like, or don't feel natural when the model tries to speak them.
 - **More audio control:** Option to generate per-beat custom lines instead of (or in addition to) in-video dialogue, better control over when native audio vs custom is used per segment, etc. The `--with-custom-narration` path is the current escape hatch.
 - **Longer total duration while using extend:** Implement the "multiple short chains + final stitch" path described above.
-- **YouTube automation:** The upload path exists but needs OAuth credentials.
+- **YouTube automation:** The upload path exists (`youtube_uploader.py`) but needs `client_secrets.json` + OAuth flow (one-time browser auth). See `config.py` and `slop_fiction_maker/README.md`.
 - **Scheduling / batching** for daily drops.
+- **Public handoff surface:** Keep the root README artistic statement + featured video + channel links fresh. The specific 004 episode (Jp2DN7GAbXw) is currently pinned as the hero. Update when a new “best” episode drops.
 
 ## Key Files & Where Things Live
 
@@ -151,9 +179,16 @@ The user (channel owner) wants to stay hands-off on implementation details but c
 - `audio.py` — TTS, Lyria, `mix_scene` (the tunable ducking), assemble helpers.
 - `script_generator.py` — Gemini prompt that produces the per-beat structure.
 - `style_bible.py` — all creative constants + the three audio volume tunables (single source of truth for mixing).
-- `config.py` — model IDs (use the short version_ids!), output paths, etc.
+- `config.py` — model IDs (use the short version_ids!), output paths, GCS/YouTube config.
 - `recover_custom_audio.py` — recovery of custom narrator from old `script.json`.
-- `README.md` and `SKILL.md` — user-facing docs (including the Audio section that explains native vs custom and the tunables).
+- `youtube_uploader.py` — optional direct upload (requires OAuth setup).
+- `README.md` and `SKILL.md` — user-facing / agent-facing docs.
+- **Root of repo:** `README.md` (artistic framing, featured YouTube video, channel promo, high-level usage) and `.gitignore` (security & hygiene — read this before any `git add`).
+
+**Important repo-level files for handoff:**
+- Root `.gitignore` (hardened to protect personal outputs and secrets).
+- Root `README.md` (the public artistic statement + Holodeck premise).
+- `AGENTS.md` at repo root (AI agent guidelines for the parent studio — we generally avoid touching `experiments/`).
 
 ## Quick Commands (for reference)
 
@@ -176,6 +211,22 @@ uv run python -m slop_fiction_maker.recover_custom_audio --run-dir "path/to/old/
 
 The code is intentionally kept relatively linear and easy to read (per the original "hands-off" spirit). Most creative levers are in `style_bible.py`. The heavy lifting re-uses the excellent primitives already present in the parent studio repo (`models/veo`, storage helpers, patterns from the story-generator skill).
 
-This should give you (or a future agent) enough context to continue iterating without having to reverse-engineer the entire history. The core "extend + per-scene native audio charm + custom narrator art piece + clean outputs" vision is implemented and working. The main remaining knobs are around continuity vs. per-piece character and how aggressively the custom track sits relative to the native audio.
+## Fresh Machine / Handoff Setup Checklist
 
-Let me know if you want any part of this doc expanded or turned into code comments.
+1. Clone the repo.
+2. `cp dotenv.template .env` (root) and fill at minimum `PROJECT_ID`. Copy any needed values from the parent studio’s working `.env` (or set via environment).
+3. (Optional but powerful) Set up YouTube:
+   - Enable YouTube Data API v3.
+   - Create OAuth Desktop credentials → `client_secrets.json`.
+   - First `--upload` run will trigger browser auth and create `youtube_token.json`.
+4. `uv sync` (or pip install -r requirements.txt) — the skill re-uses the parent repo’s Python environment.
+5. Test: `python -m slop_fiction_maker.generate_episode --random --duration 120`
+6. The first real run will create `slop_fiction_maker/output/YYYY-MM-DD/...` (this folder is gitignored — do not commit it).
+
+**Security note (do not skip):** Before any commit or push, run `git status` and `git ls-files | grep -E 'output/|\.DS_Store|\.env'` to make sure nothing personal leaks. The hardened `.gitignore` + the `bd dolt push + git push` ritual (see AGENTS.md) are mandatory for this repo.
+
+This should give you (or a future agent) enough context to continue iterating without having to reverse-engineer the entire history. The core vision — ridiculous premises turned into one-shot episodes that lean into model weirdness while quietly exploring what “personalized long-form generative media” can actually feel like — is implemented and working.
+
+The main remaining knobs are around visual/motion continuity, script dialogue naturalism, and audio balance between native Veo character and any opt-in narrator.
+
+*Onward toward the Holodeck. One face-slap at a time.*
