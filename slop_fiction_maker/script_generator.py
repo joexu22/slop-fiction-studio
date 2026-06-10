@@ -101,8 +101,10 @@ def generate_slop_script(
 
     narrator_persona = get_random_narration_style()
 
-    # Number of beats we want (roughly one beat per 6-8 seconds of final video)
-    num_beats = max(12, min(35, target_duration_seconds // 6))
+    # Number of beats we want (roughly one beat per 6-8 seconds of final video).
+    # Floor of 4 so short durations (Shorts mode, <= 60s) get a proportionally
+    # small beat count; classic episode durations (120s+) are unaffected.
+    num_beats = max(4, min(35, target_duration_seconds // 6))
 
     system_instruction = (
         "You are a legendary (and slightly unhinged) cultivation novel ghostwriter "

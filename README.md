@@ -135,6 +135,10 @@ Code is licensed under Apache 2.0 (inherited). See [LICENSE](LICENSE).
 
 See the detailed technical + artistic handoff in [slop_fiction_maker/HANDOFF.md](slop_fiction_maker/HANDOFF.md).
 
+For a human-first, no-agent-required setup guide and an audit trail of the
+infrastructure (cloud services, secrets, costs, and how to verify each piece
+yourself), see [slop_fiction_maker/MANUAL_SETUP.md](slop_fiction_maker/MANUAL_SETUP.md).
+
 Key things any new person (or agent) should know immediately:
 - The artistic framing lives in this root README (joke on the surface, Holodeck premise underneath).
 - **Never commit generated media.** `slop_fiction_maker/output/` is deliberately gitignored along with `.env*`, caches, and `.DS_Store`. See the root `.gitignore`.

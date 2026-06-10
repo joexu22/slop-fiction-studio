@@ -44,6 +44,64 @@ The output is "slop" by design — we ask the models to do their best on the
 Ghibli-cultivation aesthetic, but we celebrate the beautiful imperfections,
 motion weirdness, and uncanny moments that current Veo produces.
 
+## MCP server (the recommended agent interface)
+
+This repo ships an MCP server exposing the pipelines as tools. Claude Code
+picks it up automatically from `.mcp.json` at the repo root. Any other
+MCP-capable agent (Gemini CLI, etc.) can register it with:
+
+```json
+{"mcpServers": {"slop-fiction": {"command": "uv", "args": ["run", "python", "-m", "slop_fiction_maker.mcp_server"], "cwd": "<repo root>"}}}
+```
+
+Tools:
+
+| Tool | What it does |
+|---|---|
+| `generate_audio_story(audio_path?, topic_hint?, aspect_ratio, upload, privacy)` | Audio file → storytime video. `audio_path` omitted = newest file in `slop-video-workspace/`. Auto-uploads unlisted by default. Returns a `job_id` immediately. |
+| `generate_episode(topic?, duration_seconds, upload)` | Premise → full 2-5 min episode. `topic` omitted = random trope. Returns a `job_id`. |
+| `check_job(job_id)` | Poll until `state` is `succeeded`/`failed`. Returns progress (beats generated), run dir, final video, YouTube URL, log tail, and a resume hint on failure. |
+| `list_runs(limit)` | Recent runs with metadata, newest first. |
+| `upload_run_to_youtube(run_dir, privacy)` | Post-hoc upload of an existing run using its saved title/description/tags. |
+
+**Job pattern (important for agents):** generations take 5-20+ minutes, so the
+`generate_*` tools return immediately with a `job_id`. Poll `check_job` every
+1-2 minutes. Jobs run detached — they survive the MCP server or agent exiting.
+Logs live in `slop_fiction_maker/output/.jobs/<job_id>.log` (identical to a
+manual CLI run).
+
+**Cost awareness:** Veo generation costs real money. `generate_audio_story`
+returns an `estimated_cost_usd` (default model `3.1-lite` ≈ $0.05/s of video).
+Episodes on the default models cost roughly $0.10-0.40 per second of final
+video. Don't kick off builds speculatively.
+
+## Audio-Story Mode (storytime)
+
+The inverse pipeline: a user-provided audio file is the master soundtrack and
+the generated visuals act it out in cultivation-world metaphor. See the
+"Audio-Story Mode" section of `README.md` for the full design and the timing
+contract (the master audio is never cut, stretched, or re-timed; clips are
+generated at the next supported Veo duration ≥ each beat's transcript window,
+then trimmed to the exact window in post).
+
+The drop-folder convention: put an audio file in `slop-video-workspace/` at the
+repo root and invoke with no path — the newest audio file there is used.
+
+```bash
+# CLI equivalents of the MCP tool
+python -m slop_fiction_maker.audio_to_video                       # newest workspace audio
+python -m slop_fiction_maker.audio_to_video path/to/file.m4a \
+  --topic-hint "running out of budget"                            # explicit
+python -m slop_fiction_maker.audio_to_video --no-upload           # skip YouTube
+python -m slop_fiction_maker.audio_to_video \
+  --resume-dir slop_fiction_maker/output/2026-06-09/006-kennewick-rd \
+  --start-beat 3                                                  # crash recovery
+```
+
+Auto-upload default is **unlisted** (review via link, publish from YouTube
+Studio). One-time YouTube OAuth setup:
+`python -m slop_fiction_maker.youtube_uploader --setup`.
+
 ## How to invoke (from chat / agent / MCP)
 ```python
 from slop_fiction_maker.generate_episode import generate_slop_episode

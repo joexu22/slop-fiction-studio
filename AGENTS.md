@@ -2,6 +2,17 @@
 
 This document provides guidelines for AI agents working on the GenMedia Creative Studio codebase.
 
+## Slop Fiction skill — start here
+
+This fork's main artifact is the `slop_fiction_maker/` skill (automated video
+generation: full episodes from a premise, or "storytime" videos from an audio
+file dropped in `slop-video-workspace/`). **Any agent should read
+`slop_fiction_maker/SKILL.md` first** — it documents the MCP server (registered
+in `.mcp.json` at the repo root, tools: `generate_audio_story`,
+`generate_episode`, `check_job`, `list_runs`, `upload_run_to_youtube`), the CLI
+equivalents, the detached-job pattern for the long-running generations, and
+costs. Generation spends real money (Veo); don't kick off builds speculatively.
+
 ## Scope of Work
 
 - Do not modify code within the `experiments/` directory when refactoring or updating the main application. If a global change (like a model deprecation) impacts an experiment, add an inline `# TODO:` or `// TODO:` comment near the affected code in the experiment rather than attempting to refactor its logic.

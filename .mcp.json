@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "slop-fiction": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "slop_fiction_maker.mcp_server"]
+    }
+  }
+}

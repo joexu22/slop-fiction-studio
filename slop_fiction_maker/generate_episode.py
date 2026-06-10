@@ -57,6 +57,7 @@ def generate_slop_episode(
     youtube_privacy: str = "private",
     use_custom_narration: bool = False,
     start_beat: int = 1,
+    aspect_ratio: str = "16:9",
 ) -> GenerationResult:
     """The one function to rule them all.
 
@@ -143,7 +144,11 @@ def generate_slop_episode(
     print(
         f"\n[2/5] Generating independent per-beat videos (starting from beat {start_beat}) ...",
     )
-    beat_video_uris = generate_per_beat_videos(script, start_beat=start_beat)
+    beat_video_uris = generate_per_beat_videos(
+        script,
+        aspect_ratio=aspect_ratio,
+        start_beat=start_beat,
+    )
     print(
         f"  Generated {len(beat_video_uris)} new per-beat videos (from beat {start_beat})",
     )
@@ -363,7 +368,13 @@ if __name__ == "__main__":
         "--duration",
         type=int,
         default=180,
-        help="Target duration in seconds (120-300)",
+        help="Target duration in seconds (120-300 for episodes, <=60 for Shorts)",
+    )
+    parser.add_argument(
+        "--aspect-ratio",
+        default="16:9",
+        choices=["16:9", "9:16"],
+        help="16:9 for episodes (default), 9:16 for Shorts",
     )
     parser.add_argument(
         "--upload",
@@ -409,6 +420,7 @@ if __name__ == "__main__":
         youtube_privacy=args.privacy,
         use_custom_narration=args.use_custom_narration,
         start_beat=args.start_beat,
+        aspect_ratio=args.aspect_ratio,
     )
 
     print("\nResult JSON:")

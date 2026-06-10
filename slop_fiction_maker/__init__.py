@@ -5,6 +5,10 @@ cultivation slop fiction episodes using per-beat Veo generation + post-productio
 
 Invoke via:
     from slop_fiction_maker.generate_episode import generate_slop_episode
+
+Audio-story (storytime) mode — an existing audio file becomes the master
+soundtrack and the visuals act it out:
+    from slop_fiction_maker.audio_to_video import generate_audio_story_video
 """
 
 from .generate_episode import GenerationResult, generate_slop_episode

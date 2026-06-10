@@ -41,6 +41,7 @@ def _create_strong_reference_image(
     beat: SceneBeat,
     script: SlopFictionScript | None = None,
     narrator_persona: str = "",
+    aspect_ratio: str = "16:9",
 ) -> str | None:
     """Generate one high-quality Ghibli-style image for the beat.
     Used as an image reference (i2v) for that beat's video.
@@ -54,7 +55,7 @@ def _create_strong_reference_image(
             image_count=1,
             negative_prompt="blurry, deformed faces, bad anatomy, text, watermark, low quality",
             prompt_modifiers_segment="highly detailed, beautiful lighting, Studio Ghibli aesthetic",
-            aspect_ratio="16:9",
+            aspect_ratio=aspect_ratio,
         )
         if uris:
             return uris[0]
@@ -114,6 +115,7 @@ def generate_per_beat_videos(
             beat,
             script=script,
             narrator_persona=script.narrator_persona,
+            aspect_ratio=aspect_ratio,
         )
 
         prompt = make_veo_motion_prompt(beat, script=script)

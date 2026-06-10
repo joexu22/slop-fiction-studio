@@ -97,6 +97,61 @@ Historical runs (the old top-level timestamp folders) are left as-is for now. Yo
 
 See `recover_custom_audio.py` (below) for reorganizing + recovering assets from a specific old run.
 
+## Audio-Story Mode (storytime) — your audio file as the master soundtrack
+
+The inverse pipeline: you bring a pre-recorded audio file (a story, a rant,
+a voice memo), and the machine generates slop-fiction visuals that act it out.
+
+```bash
+# Easiest: drop a file in slop-video-workspace/ and run with no path —
+# the newest audio file there is picked up automatically.
+python -m slop_fiction_maker.audio_to_video --topic-hint "running out of budget"
+
+# Or explicit:
+python -m slop_fiction_maker.audio_to_video "slop-video-workspace/Kennewick Rd.m4a" \
+  --topic-hint "running out of budget"
+```
+
+The finished video **auto-uploads to YouTube as unlisted** (review via the
+link, publish from YouTube Studio). Pass `--no-upload` to skip, `--privacy
+public|private` to change. One-time OAuth setup:
+`python -m slop_fiction_maker.youtube_uploader --setup`.
+
+Agents can drive all of this via the MCP server (`.mcp.json` at the repo
+root) — see [SKILL.md](SKILL.md) for the tool reference and job pattern.
+
+How it works:
+
+1. Gemini transcribes the audio with segment timestamps.
+2. A storyboard is planned where each beat owns an **exact time window** of the
+   audio (3-8s, aligned to phrase boundaries). The visuals translate what's
+   being said into over-the-top cultivation-world metaphor.
+3. One Veo clip per beat (default model: the cheapest audio-capable tier,
+   `3.1-lite`, ~$0.05/s — override with `SLOP_AUDIO_STORY_VEO_MODEL`).
+   On-screen characters do **not** speak the transcript; at most they shout
+   one short comedic exclamation per beat ("My spirit stones!").
+4. Post: each clip is generated at the next supported Veo duration (4/6/8s)
+   ≥ its window, then **trimmed to the exact window**, concatenated, and the
+   original audio is laid on top at full volume with the Veo native audio
+   ducked low (`AUDIO_STORY_NATIVE_VOLUME` in `style_bible.py`, default 0.25).
+
+The timing contract: **the master audio is never cut, stretched, or re-timed.**
+Video bends to fit the audio, not the other way around. Cuts land on the
+transcript's phrase boundaries.
+
+Defaults to 9:16 / 720p — an audio file under 60s comes out as a ready-to-post
+YouTube Short (`--aspect-ratio 16:9` for landscape). `--upload` works the same
+as the episode pipeline.
+
+Crash recovery: `--resume-dir <run dir> --start-beat N` reuses the saved
+`storyboard.json` (so beat windows match the clips you already paid for) and
+continues from beat N. Earlier clips must exist as `clips/beat_NNN.mp4`.
+
+Future extension (deliberately not built yet): overlay mode — compositing the
+beat clips picture-in-picture over a longer background slop video instead of
+full-screen cuts. The timed-beat structure already supports it; it's one more
+ffmpeg pass.
+
 ## YouTube Upload (highly recommended for true automation)
 
 1. Enable the YouTube Data API v3 in your Google Cloud project.
@@ -145,3 +200,8 @@ See the root `README.md` for the artistic statement and the bigger "steps toward
 ## Technical Handoff
 
 For implementation details, audio evolution (native dialogue vs. custom narrator), decisions, gotchas, and future work, read [HANDOFF.md](HANDOFF.md).
+
+**Human setting this up by hand, or auditing what an agent did?** Read
+[MANUAL_SETUP.md](MANUAL_SETUP.md) — from-scratch setup with no agent, what
+every cloud service is for, where the secrets live, what generations cost,
+and how to independently verify each piece.

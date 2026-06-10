@@ -63,6 +63,12 @@ Thumbs.db
 .env.local
 .env.*.local
 .envrc
+# YouTube OAuth credentials (created by slop_fiction_maker youtube setup)
+client_secrets.json
+*client_secret*.json
+youtube_token.json
+# Audio-story drop folder (personal recordings — never commit)
+slop-video-workspace/
 # Allow committed templates/examples so a fresh clone + config file "just works"
 !.env.template
 !.env.example

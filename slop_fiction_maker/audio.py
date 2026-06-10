@@ -246,6 +246,125 @@ def mix_scene(
     return output_path
 
 
+def normalize_and_trim_clip(
+    input_path: str,
+    output_path: str,
+    target_duration: float,
+    fps: int = 24,
+) -> str:
+    """Trim a generated clip to an exact duration and normalize its codec
+    parameters so all clips can be losslessly concatenated.
+
+    Used by the audio-story pipeline: clips are generated at the next
+    supported Veo duration (4/6/8s) >= the beat's audio window, then trimmed
+    here to the exact window so cuts land precisely on the master audio
+    timeline. If the clip is somehow shorter than the window, the last frame
+    is held (tpad) and the audio padded with silence — the master audio
+    timing is never compromised.
+    """
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+    ]
+    if not has_audio_stream(input_path):
+        cmd += ["-f", "lavfi", "-i", "anullsrc=cl=stereo:r=44100"]
+
+    cmd += [
+        "-vf",
+        f"tpad=stop_mode=clone:stop_duration={target_duration},fps={fps}",
+        "-af",
+        "apad",
+        "-t",
+        f"{target_duration:.3f}",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+        output_path,
+    ]
+    subprocess.run(
+        cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return output_path
+
+
+def mix_master_audio(
+    video_path: str,
+    master_audio_path: str,
+    output_path: str,
+    native_volume: float | None = None,
+    master_volume: float | None = None,
+) -> str:
+    """Lay a master audio track (e.g. a user-provided recording) over a video.
+
+    The inverse philosophy of mix_scene: here the external audio is the star
+    and the native Veo audio (short exclamations, ambient SFX) is ducked low
+    underneath it. The video stream is passed through untouched, so the
+    timing established by normalize_and_trim_clip is preserved exactly.
+    """
+    native_vol = (
+        native_volume
+        if native_volume is not None
+        else STYLE.AUDIO_STORY_NATIVE_VOLUME
+    )
+    master_vol = (
+        master_volume
+        if master_volume is not None
+        else STYLE.AUDIO_STORY_MASTER_VOLUME
+    )
+
+    filters = []
+    if has_audio_stream(video_path):
+        filters.append(f"[0:a]volume={native_vol}[bgv]")
+    else:
+        filters.append("anullsrc=cl=stereo:r=44100[bgv]")
+    filters.append(f"[1:a]volume={master_vol}[master]")
+    # normalize=0 so amix doesn't halve both inputs — the volume filters
+    # above are the single source of truth for the balance.
+    filters.append(
+        "[master][bgv]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]",
+    )
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_path,
+        "-i",
+        master_audio_path,
+        "-filter_complex",
+        ";".join(filters),
+        "-map",
+        "0:v",
+        "-map",
+        "[aout]",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-ar",
+        "44100",
+        output_path,
+    ]
+    print(
+        f"  [audio] Mixing master audio over video (master={master_vol}, native={native_vol})",
+    )
+    subprocess.run(
+        cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return output_path
+
+
 def assemble_final_video(
     mixed_scene_paths: list[str],
     output_path: str,

@@ -154,6 +154,12 @@ class SlopFictionStyle:
     )
     MUSIC_VOLUME: float = 0.2  # supporting music bed
 
+    # Audio-story mode (audio_to_video.py): a user-provided audio file is the
+    # master soundtrack; native Veo audio (short exclamations + SFX) sits low
+    # underneath it so it adds comedy without competing.
+    AUDIO_STORY_MASTER_VOLUME: float = 1.0  # the user's audio file — the star
+    AUDIO_STORY_NATIVE_VOLUME: float = 0.25  # ducked Veo exclamations/ambience
+
     def __post_init__(self):
         if self.narration_styles is None:
             self.narration_styles = OVER_THE_TOP_NARRATION_STYLES

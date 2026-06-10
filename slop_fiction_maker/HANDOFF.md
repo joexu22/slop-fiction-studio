@@ -1,7 +1,7 @@
 # Slop Fiction Maker — Handoff Document
 
 **Project:** `slop-fiction-studio` (personal fork/art project)  
-**Core Artifact:** `slop_fiction_maker/` — a one-shot AI skill for generating 2–5 minute "Meme Slop Fiction" cultivation episodes.
+**Core Artifact:** `slop_fiction_maker/` — a one-shot AI skill for generating "Meme Slop Fiction" cultivation videos in three forms: 2–5 minute episodes (16:9), vertical Shorts (9:16, ≤60s target), and "audio-story" storytime videos built around a user-provided audio recording.
 
 ## Project Identity (Artistic + Practical Handoff)
 
@@ -34,13 +34,16 @@ This document captures the major technical work, decisions, trade-offs, current 
 
 The user (channel owner) wants to stay hands-off on implementation details but cares about the final creative output and being able to iterate on audio balance, consistency, and structure. During handoff write we also did a small cleanup of the orchestrator finalization (undefined variables from earlier native-only bypass experiments) so the full described flow actually runs to completion.
 
-## Quick Status at Handoff
-- Long-chain extension is the default (consistency wins).
-- Hybrid audio (native per-extension Veo audio + full custom narrator + Lyria) is the active path and runs every generation.
-- Clean `YYYY-MM-DD/NNN-slug/` + `clips/`, `audio/`, `final/` structure is enforced.
-- Volumes default to equal-loudness preference for native vs. custom narrator (0.9 / 0.9).
-- `recover_custom_audio.py` successfully used to rescue at least one historical "lost artform" custom narration track from its `script.json`.
+## Quick Status at Handoff (updated 2026-06-10)
+- **Per-beat independent generation + ffmpeg post-stitch is the default video path** (extension chains are capped at ~30s; the long-chain notes below in Decision 1/5 are historical).
+- **Native in-video dialogue is the default audio** (Decision 6); the custom TTS narrator is opt-in via `--with-custom-narration`.
+- **Three working pipelines:** episodes (`generate_episode.py`), Shorts (same CLI with `--aspect-ratio 9:16` + short `--duration`, see Decision 10), and audio-story storytime videos (`audio_to_video.py`, see Decision 8). Proven runs: 006 (audio story from a voice memo), 007 (Slop Dao short, 9:16, 66s).
+- **MCP server live** (`mcp_server.py`, registered in root `.mcp.json`) — any agent can generate/poll/upload via 5 tools with a detached-job pattern (Decision 9).
+- **YouTube upload fully configured** (2026-06-09): OAuth done, token bound to the Slop Fiction Brand Account, wrong-channel guard active (`YOUTUBE_EXPECTED_CHANNEL` in `.env`), consent screen "In production" so the token doesn't expire weekly. Audio-story builds auto-upload unlisted; episodes are opt-in. First upload verified live: https://youtu.be/yyShW0TuyeA (007, unlisted).
+- **Firestore + YouTube Data APIs enabled** in the owner's GCP project (ID lives in the local `.env`, redacted here per repo convention); run records write successfully.
+- Clean `YYYY-MM-DD/NNN-slug/` + `clips/`, `audio/`, `final/` structure is enforced; job logs live under `output/.jobs/`.
 - All major early errors (model version_id strings, TTS 403, image 400 fallback, duration clamping, folder hygiene) have been addressed or documented.
+- **Default cost posture:** audio-story and Shorts run on `3.1-lite` (~$0.05/s, the jank is on-brand); episodes default to `3.1` unless `SLOP_VEO_MODEL` overrides.
 
 ## Current High-Level Flow (as of latest run)
 
@@ -59,8 +62,8 @@ The user (channel owner) wants to stay hands-off on implementation details but c
    - All per-beat clips are downloaded, then concatenated with ffmpeg (`assemble_final_video`) into the final episode.
    - This is the reliable long-form path and fixes the previous "only last chain segment kept as final" problem.
 
-3. **Custom Audio Layer** (`audio.py`)
-   - Now that the Text-to-Speech API is enabled: full custom over-the-top narrator track is generated from the joined per-beat `narration_text` lines + the chosen persona (via Gemini TTS with strong style prompt, falling back to Chirp 3 HD).
+3. **Custom Audio Layer** (`audio.py`) — **opt-in only** (`--with-custom-narration`; see Decision 6)
+   - When enabled: full custom over-the-top narrator track is generated from the joined per-beat `narration_text` lines + the chosen persona (via Gemini TTS with strong style prompt, falling back to Chirp 3 HD).
    - Lyria music track.
    - Post-process mix over the chained video using `mix_scene` (ffmpeg filter complex):
      - Voice-first timing with 1.25× tempo guardrail (if custom narration is much longer, keep natural speed and loop/extend the video instead of mangling the voice).
@@ -110,7 +113,7 @@ The user (channel owner) wants to stay hands-off on implementation details but c
     - `MUSIC_VOLUME = 0.2`
   These are now the single source of truth and easy to tweak for future runs or re-mixes.
 
-### 3. Custom Audio Always Runs (Now That TTS Is Enabled)
+### 3. Custom Audio Always Runs (Now That TTS Is Enabled) — *historical; superseded by Decision 6 (custom narration is opt-in now)*
 - Previously we had various bypasses/guards because the Text-to-Speech API was not enabled.
 - Once the user enabled it, we made the custom narrator + music + mix step run as part of the normal flow (after video generation).
 - The pure `custom_narration.wav` is always saved so the "lost artform piece" is never lost again.
@@ -148,41 +151,141 @@ The user (channel owner) wants to stay hands-off on implementation details but c
 - **Duration handling in per-beat/chain:** Hard-code to supported values (4/6/8) for the chosen model instead of blindly trusting the script's `approximate_duration_hint`.
 - **Recovery of "lost" custom tracks:** The `recover_custom_audio.py` script exists precisely because an earlier run produced a great script + video but the custom narration was never generated (TTS was off + we were in native-only mode at the time). It re-uses the exact `script.json` from that run. It still works for re-applying a narrator to a native-dialogue run.
 
+### 8. Audio-Story Mode (June 2026)
+- **What:** `audio_to_video.py` + `audio_story.py` — the inverse pipeline. A user-provided
+  audio file is the master soundtrack; Gemini transcribes it with timestamps, plans beats
+  that each own an exact audio window, Veo generates per-beat clips (silent pantomime +
+  at most one short exclamation), and post trims each clip to its exact window before
+  laying the original audio on top (Veo audio ducked to `AUDIO_STORY_NATIVE_VOLUME`).
+- **Why:** The user wanted to make videos *about* existing audio recordings (storytime
+  style) and was explicitly worried about clip durations (4/6/8s) not lining up with the
+  voice. The solution: clips are generated at the next supported duration ≥ the beat's
+  window and trimmed to the exact window in post — the master audio is never altered.
+- **Model:** defaults to `3.1-lite` (cheapest audio-capable tier) since the clips are
+  deliberately comedic background; `SLOP_AUDIO_STORY_VEO_MODEL` overrides.
+- **Resume:** `--resume-dir` + `--start-beat` reuses the saved `storyboard.json` so beat
+  windows stay consistent with already-generated clips (unlike the episode pipeline,
+  regenerating the plan on resume would break timing).
+- **Not built yet (by choice):** overlay/PiP compositing over a background slop video,
+  and any logic that re-times or cuts the source audio.
+- **Proven:** run 006 (2026-06-09, "Kennewick Rd" voice memo about running out of budget,
+  28s, 5 beats, ~$1.70).
+
+### 9. MCP Server + Auto-Upload + Firestore (June 2026)
+- **MCP server** (`mcp_server.py` + `jobs.py`, registered via root `.mcp.json`): the
+  general agent interface. Tools return a `job_id` immediately and the generation runs
+  as a detached subprocess (runner pattern in `jobs.py` — the runner waits on the real
+  command and records the exit code in `output/.jobs/<id>.json`, because a directly
+  detached child becomes a zombie that still looks alive to `os.kill`). Stdout is the
+  MCP protocol channel, so all package imports in `mcp_server.py` are wrapped in
+  `redirect_stdout(stderr)` — the studio modules print at import time.
+- **Auto-upload unlisted:** audio-story builds now default to
+  `upload_to_youtube=True, privacy="unlisted"` (`--no-upload` to skip). Episode pipeline
+  stays opt-in. `client_secrets.json`/`youtube_token.json` are gitignored.
+- **Workspace drop folder:** `slop-video-workspace/` at the repo root
+  (`SLOP_WORKSPACE_DIR` to override). CLI/MCP with no audio path = newest audio file there.
+- **Firestore enabled** in the project (June 9, 2026: API + `(default)` database in
+  us-central1), so `RECORD_TO_FIRESTORE` works now. YouTube Data API v3 also enabled.
+- **YouTube OAuth COMPLETED (2026-06-09)** and verified end-to-end: token bound to the
+  **Slop Fiction Brand Account** (the channel-chooser step during the browser auth decides
+  this), consent screen set to "In production" (testing-status tokens expire every 7
+  days), and the first upload is live unlisted: https://youtu.be/yyShW0TuyeA (run 007).
+- **Wrong-channel guard:** `YOUTUBE_EXPECTED_CHANNEL=Slop Fiction` in `.env`. Setup
+  refuses a token for any other channel, and every upload re-verifies identity before
+  sending bytes (`WrongChannelError` in `youtube_uploader.py`). To redo the binding:
+  delete `youtube_token.json`, re-run `--setup`, pick the brand channel.
+- **Token scope is deliberately minimal** (upload + readonly): it cannot delete videos
+  or change channel settings. Side effect: a stray private "guard test" video uploaded
+  during verification on 2026-06-09 must be deleted manually in YouTube Studio.
+- **Caveat to watch:** unverified API projects can have uploads locked private by
+  YouTube until passing their API audit. Run 007 was NOT locked (verified in Studio),
+  so this hasn't bitten — but check new uploads occasionally.
+
+### 10. Shorts Mode (June 2026)
+- **What:** the episode pipeline now does vertical Shorts. `--aspect-ratio 9:16` on
+  `generate_episode.py` (threaded through `video_chainer.py` including reference-image
+  aspect), and the script generator's beat-count floor dropped from 12 to 4
+  (`script_generator.py`) so short targets get proportionally few beats. Classic episode
+  durations (120s+) are completely unaffected by the floor change.
+- **Model for Shorts:** run with `SLOP_VEO_MODEL=3.1-lite` — ~8× cheaper than `3.1`
+  and the Lite jank suits the format (user-approved aesthetic).
+- **Proven:** run 007 (2026-06-09, "Slop Dao" agentic-programming meta-joke, 9 beats,
+  9:16, ~$3.30, live unlisted at https://youtu.be/yyShW0TuyeA).
+- **Known calibration gap:** 007 targeted 54s but came out 66s — Gemini's per-beat
+  `approximate_duration_hint` leans toward 8s. Still fine (YouTube Shorts allows up to
+  3 min vertical), but cap the hints or lower `--duration` if tighter cuts matter.
+
 ## Current Recommended Workflow (Hands-Off)
 
-1. Throw a premise at the skill (CLI or Python call).
-2. By default it produces:
-   - A script with explicit `dialogue` per beat.
-   - Long chained video via Veo extension where the characters speak the written dialogue using native audio.
-   - `clips/step_XX.mp4` (raw extension steps with embedded dialogue audio)
-   - `final/sl op_fiction_episode_native_audio.mp4` (the main deliverable)
-3. If you want the old glorious external narrator on top of the in-scene dialogue:
-   - `python -m slop_fiction_maker.generate_episode "..." --with-custom-narration`
-   - This will also populate `audio/custom_narration.wav` and produce a `_custom_audio.mp4`.
-4. Re-mixing or recovering custom narration on any native run is still possible with the utilities in `audio.py` / `recover_custom_audio.py`.
+Three entry points, all one-shot:
+
+1. **Episode from a premise** — `python -m slop_fiction_maker.generate_episode "..." --duration 180`.
+   Produces a script with explicit per-beat `dialogue`, one independent Veo clip per beat
+   (characters speak via native audio), ffmpeg-stitched into
+   `final/slop_fiction_episode_native_audio.mp4`. Add `--with-custom-narration` for the
+   old external narrator on top; `--upload` to publish.
+2. **Short from a premise** — same CLI with `--aspect-ratio 9:16 --duration 54` and
+   `SLOP_VEO_MODEL=3.1-lite` in the environment (see Decision 10).
+3. **Storytime video from a recording** — drop the audio file in `slop-video-workspace/`
+   and run `python -m slop_fiction_maker.audio_to_video --topic-hint "..."` (no path
+   needed; newest file wins). Auto-uploads unlisted to the Slop Fiction channel.
+
+Agents do the same through the MCP tools (`generate_episode`, `generate_audio_story`,
+`check_job`, `list_runs`, `upload_run_to_youtube`) — see `SKILL.md`.
+
+Re-mixing or recovering custom narration on any native run is still possible with the
+utilities in `audio.py` / `recover_custom_audio.py`.
 
 ## Open / Future Work (Prioritized by User Feedback)
 
-- **Consistency vs. per-scene native audio:** Long chain is better for motion continuity (your original request). Pure per-beat gives stronger per-clip native character but weaker cross-beat continuity. A hybrid (short chains per logical group of beats + final FFmpeg stitch of the groups) is probably the sweet spot for longer episodes.
-- **Visual continuity between beats/clips:** Last-frame extraction + use as reference image (or as the starting frame for the next short chain) would help without losing the per-piece native audio.
-- **Script quality (dialogue length, naturalism & flow):** Now that dialogue is the primary spoken content fed to Veo, you may want to iterate on the prompt in `script_generator.py` if the generated lines are too short, too narrator-like, or don't feel natural when the model tries to speak them.
-- **More audio control:** Option to generate per-beat custom lines instead of (or in addition to) in-video dialogue, better control over when native audio vs custom is used per segment, etc. The `--with-custom-narration` path is the current escape hatch.
-- **Longer total duration while using extend:** Implement the "multiple short chains + final stitch" path described above.
-- **YouTube automation:** The upload path exists (`youtube_uploader.py`) but needs `client_secrets.json` + OAuth flow (one-time browser auth). See `config.py` and `slop_fiction_maker/README.md`.
-- **Scheduling / batching** for daily drops.
-- **Public handoff surface:** Keep the root README artistic statement + featured video + channel links fresh. The specific 004 episode (Jp2DN7GAbXw) is currently pinned as the hero. Update when a new “best” episode drops.
+Done since the original list: ~~YouTube automation~~ (Decision 9), ~~Shorts adaptation~~
+(Decision 10), ~~MCP tool wrapper~~ (Decision 9), ~~audio-driven generation~~ (Decision 8).
+
+Still open, roughly in priority order:
+
+- **Visual continuity between beats/clips** — the biggest quality lever. Last-frame
+  extraction → reference image for the next beat would help a lot. Blocked partly by the
+  image-helper 400 (Decision 7 / next bullet); character consistency currently rests on
+  text descriptions alone.
+- **Fix the reference-image 400** (`FAILED_PRECONDITION`): `models/image_models.py` still
+  uses the old Vertex Predict path for `gemini-*-image` models. Every per-beat reference
+  image silently fails and the pipeline continues without. Fixing this unlocks the
+  continuity work above.
+- **Shorts duration calibration:** per-beat duration hints lean 8s, so targets overshoot
+  (54s → 66s on run 007). Cap hints for short targets in `script_generator.py` if needed.
+- **Audio-story overlay mode:** composite beat clips picture-in-picture over a background
+  slop video instead of full-screen cuts. The timed-beat structure supports it; it's one
+  more ffmpeg pass (deliberately deferred).
+- **Script quality (dialogue length, naturalism & flow):** iterate the prompt in
+  `script_generator.py` if Veo-spoken lines feel too short or narrator-like.
+- **More audio control:** per-beat custom lines, per-segment native-vs-custom choices.
+  `--with-custom-narration` is the current escape hatch.
+- **Scheduling / batching** for daily drops (the MCP job pattern is the natural substrate).
+- **Publish flow:** uploads land unlisted by design; flipping to public is manual in
+  YouTube Studio. Could add a `publish_run` tool if the manual step gets old.
+- **YouTube API verification:** if uploads ever start getting locked private (unverified
+  project caveat, Decision 9), file YouTube's API audit form.
+- **Public handoff surface:** Keep the root README artistic statement + featured video +
+  channel links fresh. Episode 004 (Jp2DN7GAbXw) is the pinned hero; the Slop Dao short
+  (yyShW0TuyeA) is a candidate once public. Update when a new "best" drops.
 
 ## Key Files & Where Things Live
 
 - `generate_episode.py` — main orchestrator (script → video → custom audio → metadata).
+- `audio_to_video.py` — audio-story orchestrator (transcribe → storyboard → per-beat video → trim/concat/master-mix).
+- `audio_story.py` — transcription, timed storyboard planning + normalization, storytime Veo prompts.
 - `video_chainer.py` — the long extension logic + saving of step clips.
 - `audio.py` — TTS, Lyria, `mix_scene` (the tunable ducking), assemble helpers.
 - `script_generator.py` — Gemini prompt that produces the per-beat structure.
 - `style_bible.py` — all creative constants + the three audio volume tunables (single source of truth for mixing).
 - `config.py` — model IDs (use the short version_ids!), output paths, GCS/YouTube config.
 - `recover_custom_audio.py` — recovery of custom narrator from old `script.json`.
-- `youtube_uploader.py` — optional direct upload (requires OAuth setup).
+- `youtube_uploader.py` — upload + `--setup` OAuth flow + wrong-channel guard (configured and working as of 2026-06-09).
+- `jobs.py` — detached background jobs (runner pattern, registry in `output/.jobs/`).
+- `mcp_server.py` — the agent interface (5 MCP tools over stdio; registered in root `.mcp.json`).
 - `README.md` and `SKILL.md` — user-facing / agent-facing docs.
+- `MANUAL_SETUP.md` — human-first setup + audit guide (no agent required): what each
+  cloud service is for, where secrets live, costs, and per-claim verification commands.
 - **Root of repo:** `README.md` (artistic framing, featured YouTube video, channel promo, high-level usage) and `.gitignore` (security & hygiene — read this before any `git add`).
 
 **Important repo-level files for handoff:**
@@ -195,6 +298,21 @@ The user (channel owner) wants to stay hands-off on implementation details but c
 ```bash
 # Normal generation (uses current structure + current audio balance)
 uv run python -m slop_fiction_maker.generate_episode "your premise" --duration 120
+
+# Vertical Short on the cheap model
+SLOP_VEO_MODEL=3.1-lite uv run python -m slop_fiction_maker.generate_episode \
+  "your premise" --duration 54 --aspect-ratio 9:16
+
+# Storytime video from the newest recording in slop-video-workspace/
+# (auto-uploads unlisted to the Slop Fiction channel)
+uv run python -m slop_fiction_maker.audio_to_video --topic-hint "what it's about"
+
+# Check a detached MCP-started job by hand
+cat slop_fiction_maker/output/.jobs/<job_id>.json
+tail -f slop_fiction_maker/output/.jobs/<job_id>.log
+
+# Re-verify / redo the YouTube channel binding
+uv run python -m slop_fiction_maker.youtube_uploader --setup
 
 # Re-mix an existing native video with new balance (edit style_bible.py first if desired)
 uv run python -c '
@@ -213,20 +331,31 @@ The code is intentionally kept relatively linear and easy to read (per the origi
 
 ## Fresh Machine / Handoff Setup Checklist
 
+**Full human-readable version of this checklist (with per-step verification): `MANUAL_SETUP.md`.**
+
 1. Clone the repo.
-2. `cp dotenv.template .env` (root) and fill at minimum `PROJECT_ID`. Copy any needed values from the parent studio’s working `.env` (or set via environment).
-3. (Optional but powerful) Set up YouTube:
-   - Enable YouTube Data API v3.
-   - Create OAuth Desktop credentials → `client_secrets.json`.
-   - First `--upload` run will trigger browser auth and create `youtube_token.json`.
-4. `uv sync` (or pip install -r requirements.txt) — the skill re-uses the parent repo’s Python environment.
-5. Test: `python -m slop_fiction_maker.generate_episode --random --duration 120`
-6. The first real run will create `slop_fiction_maker/output/YYYY-MM-DD/...` (this folder is gitignored — do not commit it).
+2. `cp dotenv.template .env` (root) and fill at minimum `PROJECT_ID`. Recommended:
+   also `YOUTUBE_EXPECTED_CHANNEL=Slop Fiction` (the wrong-channel upload guard).
+3. `uv sync` — the skill re-uses the parent repo's Python environment.
+4. Enable the cloud APIs (one-time per project): `aiplatform`, `texttospeech`,
+   `firestore` (+ create the `(default)` database), `youtube` — commands in
+   `MANUAL_SETUP.md` §4–5.
+5. (Optional but powerful) Set up YouTube: create an OAuth **Desktop** client in the
+   console → save as `client_secrets.json` at repo root → set the consent screen to
+   **"In production"** (avoids 7-day token expiry) →
+   `uv run python -m slop_fiction_maker.youtube_uploader --setup` → **pick the Slop
+   Fiction Brand Account on the channel chooser**. Details + pitfalls: `MANUAL_SETUP.md` §6.
+6. Agents: `.mcp.json` at the repo root registers the MCP server automatically for
+   Claude Code; other agents can use the same command (see `SKILL.md`).
+7. Test cheap: `uv run python -m slop_fiction_maker.audio_to_video --no-upload` with any
+   short audio file in `slop-video-workspace/` (~$1.50), or a Short per the Quick
+   Commands above.
+8. The first real run will create `slop_fiction_maker/output/YYYY-MM-DD/...` (this folder is gitignored — do not commit it).
 
 **Security note (do not skip):** Before any commit or push, run `git status` and `git ls-files | grep -E 'output/|\.DS_Store|\.env'` to make sure nothing personal leaks. The hardened `.gitignore` + the `bd dolt push + git push` ritual (see AGENTS.md) are mandatory for this repo.
 
-This should give you (or a future agent) enough context to continue iterating without having to reverse-engineer the entire history. The core vision — ridiculous premises turned into one-shot episodes that lean into model weirdness while quietly exploring what “personalized long-form generative media” can actually feel like — is implemented and working.
+This should give you (or a future agent) enough context to continue iterating without having to reverse-engineer the entire history. The core vision — ridiculous premises (or a voice memo) turned into one-shot videos that lean into model weirdness while quietly exploring what "personalized generative media" can actually feel like — is implemented and working end-to-end: premise/audio in → unlisted YouTube video on the Slop Fiction channel out, drivable by hand, by CLI, or by any MCP-capable agent.
 
-The main remaining knobs are around visual/motion continuity, script dialogue naturalism, and audio balance between native Veo character and any opt-in narrator.
+The main remaining quality lever is visual continuity between beats (blocked partly on the reference-image 400 fix); after that, script naturalism and the publish/scheduling conveniences in the Open Work list.
 
 *Onward toward the Holodeck. One face-slap at a time.*
