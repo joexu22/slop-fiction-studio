@@ -21,6 +21,10 @@ Usage from chat/agent:
 
 Or CLI:
     python -m slop_fiction_maker.audio_to_video "slop-video-workspace/Kennewick Rd.m4a"
+
+    # Upload only the video track (no master audio mix):
+    python -m slop_fiction_maker.audio_to_video "slop-video-workspace/Kennewick Rd.m4a" \
+        --upload-variants video-track
 """
 
 import argparse
@@ -66,7 +70,9 @@ class AudioStoryResult:
     description: str
     tags: list
     local_video_path: str | None = None
-    youtube_url: str | None = None
+    youtube_url: str | None = None  # kept for backward compat (points to mixed)
+    youtube_url_mixed: str | None = None
+    youtube_url_video_track: str | None = None
     duration_seconds: float = 0.0
 
 
@@ -175,6 +181,7 @@ def generate_audio_story_video(
     native_volume: float | None = None,
     resume_dir: str | None = None,
     start_beat: int = 1,
+    upload_variants: str = "both",
 ) -> AudioStoryResult:
     """One-shot: audio file in, finished storytime video out.
 
@@ -185,6 +192,12 @@ def generate_audio_story_video(
     to public in YouTube Studio. Requires the one-time OAuth setup
     (python -m slop_fiction_maker.youtube_uploader --setup); until then the
     upload step is skipped with a pointer to setup (non-fatal).
+
+    upload_variants: "both" (default), "mixed", or "video-track".
+    - "both": upload both the final mixed video (with master audio) and the
+      raw video track.
+    - "mixed": only the final mixed version (slop_audio_story.mp4).
+    - "video-track": only the concatenated Veo video track (video_track.mp4).
 
     resume_dir + start_beat: point at an existing run directory to reuse its
     storyboard.json (the beat windows must match the already-generated clips)
@@ -296,7 +309,7 @@ def generate_audio_story_video(
     )
     duration = get_duration(final_video)
     print(
-        f"  Final video: {final_video} ({duration:.1f}s vs audio {audio_duration:.1f}s)"
+        f"  Final video: {final_video} ({duration:.1f}s vs audio {audio_duration:.1f}s)",
     )
 
     # 5. METADATA + GCS + optional YouTube
@@ -355,7 +368,9 @@ https://www.youtube.com/@slopfictionYT
     }
     (run_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
 
-    youtube_url = None
+    youtube_url_mixed = None
+    youtube_url_video_track = None
+
     if upload_to_youtube:
         try:
             from .youtube_uploader import is_upload_ready, upload_video
@@ -366,16 +381,43 @@ https://www.youtube.com/@slopfictionYT
                     "    python -m slop_fiction_maker.youtube_uploader --setup",
                 )
             else:
-                print(f"  Uploading to YouTube ({youtube_privacy})...")
-                video_id = upload_video(
-                    video_path=final_video,
-                    title=title,
-                    description=description,
-                    tags=tags,
-                    privacy_status=youtube_privacy,
-                )
-                if video_id:
-                    youtube_url = f"https://youtu.be/{video_id}"
+                video_track_path = str(run_dir / "final" / "video_track.mp4")
+
+                if upload_variants in ("both", "mixed"):
+                    print(
+                        f"  Uploading mixed version to YouTube ({youtube_privacy})...",
+                    )
+                    video_id = upload_video(
+                        video_path=final_video,
+                        title=title,
+                        description=description,
+                        tags=tags,
+                        privacy_status=youtube_privacy,
+                    )
+                    if video_id:
+                        youtube_url_mixed = f"https://youtu.be/{video_id}"
+
+                if upload_variants in ("both", "video-track"):
+                    if Path(video_track_path).exists():
+                        vt_title = title.replace(
+                            " | Slop Fiction Storytime",
+                            " | Slop Fiction Storytime (Video Track)",
+                        )
+                        print(
+                            f"  Uploading video track to YouTube ({youtube_privacy})...",
+                        )
+                        vt_video_id = upload_video(
+                            video_path=video_track_path,
+                            title=vt_title,
+                            description=description,
+                            tags=tags + ["video track"],
+                            privacy_status=youtube_privacy,
+                        )
+                        if vt_video_id:
+                            youtube_url_video_track = f"https://youtu.be/{vt_video_id}"
+                    else:
+                        print("  Video track not found, skipping video-track upload.")
+
         except Exception as e:
             print(
                 f"  YouTube upload failed (video is safe locally + in GCS): {e}\n"
@@ -400,6 +442,9 @@ https://www.youtube.com/@slopfictionYT
         except Exception as e:
             print(f"  (Non-fatal) Could not record to Firestore: {e}")
 
+    # Backward compat: youtube_url points to the mixed version when available
+    youtube_url = youtube_url_mixed
+
     result = AudioStoryResult(
         audio_path=str(audio_file),
         storyboard=storyboard.to_dict(),
@@ -409,6 +454,8 @@ https://www.youtube.com/@slopfictionYT
         tags=tags,
         local_video_path=final_video,
         youtube_url=youtube_url,
+        youtube_url_mixed=youtube_url_mixed,
+        youtube_url_video_track=youtube_url_video_track,
         duration_seconds=duration,
     )
 
@@ -416,8 +463,10 @@ https://www.youtube.com/@slopfictionYT
     print(" AUDIO STORY COMPLETE — SLAP IT ON THE INTERNET")
     print(f" Title: {title}")
     print(f" Video: {final_gcs}")
-    if youtube_url:
-        print(f" YouTube: {youtube_url}")
+    if youtube_url_mixed:
+        print(f" YouTube (mixed): {youtube_url_mixed}")
+    if youtube_url_video_track:
+        print(f" YouTube (video track): {youtube_url_video_track}")
     print(f" Local copy: {final_video}")
     print(f"{'=' * 60}\n")
 
@@ -470,6 +519,15 @@ if __name__ == "__main__":
         help="YouTube privacy for the auto-upload (default: unlisted)",
     )
     parser.add_argument(
+        "--upload-variants",
+        default="both",
+        choices=["both", "mixed", "video-track"],
+        help="Which versions to upload to YouTube. "
+        "'both' (default) uploads the final mixed video (with master audio) "
+        "and the raw video track. 'mixed' uploads only the mixed version. "
+        "'video-track' uploads only the concatenated Veo video track.",
+    )
+    parser.add_argument(
         "--resume-dir",
         help="Existing run directory to resume (reuses its storyboard.json so "
         "beat windows match the already-generated clips)",
@@ -494,6 +552,7 @@ if __name__ == "__main__":
         native_volume=args.native_volume,
         resume_dir=args.resume_dir,
         start_beat=args.start_beat,
+        upload_variants=args.upload_variants,
     )
 
     print("\nResult JSON:")
